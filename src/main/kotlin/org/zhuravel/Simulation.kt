@@ -1,6 +1,6 @@
 package org.zhuravel
 
-class Simulation {
+open class Simulation {
     companion object {
 
         fun runWithBrokenLeaderToNodeLinks(
