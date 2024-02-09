@@ -2,7 +2,6 @@ package org.zhuravel.kalasim
 
 import Configuration.LEADER_SEND_HEARTBEAT_DELAY
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import org.apache.commons.math3.distribution.NormalDistribution
 import org.kalasim.Component
@@ -24,45 +23,64 @@ class Node(
     val incomingHeartBeatMsgs = ComponentQueue<HeartbeatMsg>()
     val receivedVotes = AtomicInteger(0)
     val totalNodes = links.size + 1
-    var currentTerm = 1
+    var currentTerm = 0
 
 
     override fun process() = sequence {
         while (true) {
-            when (state) {
-                NodeState.FOLLOWER -> doFollowerJob()
-                NodeState.LEADER -> doLeaderJob()
-                NodeState.CANDIDATE -> doCandidateJob()
-            }
-        }
-    }
+            println("Waiting for heartbeat")
+            wait(StateRequest(incomingMsg, predicate = { incomingMsg.value.term >= currentTerm }), failAt = now.plus(300.milliseconds))
 
-    private suspend fun SequenceScope<Component>.doLeaderJob() {
-        println("Checking for heartbeat from new leader")
+            if (failed) {
+                when (state) {
+                    NodeState.FOLLOWER -> {
+                        println("Heartbeat wasn't received. Reconfiguring the cluster by ${this@Node}")
+                        triggerReconfiguration()
+                    }
+                    NodeState.LEADER -> {
+                        links.forEach { link ->
+                            sendHeartbeatMsgThrouhg(link)
+                            println("heartbeat sent to the node: ${link.receiver} by ${this@Node}")
+                        }
+                        hold(LEADER_SEND_HEARTBEAT_DELAY)
+                    }
+                    NodeState.CANDIDATE -> {
+                        val voteRequests = links.map { it.receiver to VoteRequestMsg() }
 
+                        voteRequests.forEach { (node, msg) ->
+                            node.receiveVoteRequest(this@Node, msg)
+                        }
 
-        val newMsgs = incomingHeartBeatMsgs.asSortedList().asSequence()
-            .map { it.component }
-            .filter { it.term > currentTerm }
-            .toList()
-
-        if (newMsgs.isEmpty()) {
-            links.forEach { link ->
-                sendHeartbeatMsgThrouhg(link)
-                println("heartbeat sent to the node: ${link.receiver} by ${this@Node}")
-            }
-            hold(LEADER_SEND_HEARTBEAT_DELAY)
-        } else {
-            while (incomingHeartBeatMsgs.isNotEmpty()) {
-                val heartbeatMsg = incomingHeartBeatMsgs.poll()
-                if (heartbeatMsg.term > currentTerm) {
-                    stepDownAsALeader(heartbeatMsg)
-                } else {
-                    println("Heartbeat with term: ${heartbeatMsg.term} ignored by: ${this@Node} with current term: ${currentTerm}")
+                        val votes = receivedVotes.get()
+                        if (votes > totalNodes / 2) {
+                            this@Node.state = NodeState.LEADER
+                            this@Node.currentTerm += 1
+                            println("${this@Node} is now the leader of term $currentTerm")
+                        } else {
+                            this@Node.state = NodeState.FOLLOWER
+                            println("Votes ${votes}/${totalNodes / 2} received, ${this@Node} stays as follower")
+                        }
+                    }
                 }
+            } else {
+                when (state) {
+                    NodeState.FOLLOWER -> {
+                        println("Heartbeat: ${incomingMsg.value.term} processed by ${this@Node}")
+                        receiveVoteCandidate(this@Node, VoteCandidateMsg(this@Node, true))
+                    }
+                    NodeState.LEADER -> {
+                        stepDownAsALeader(incomingMsg.value)
+                    }
+                    NodeState.CANDIDATE -> {
+                        println("Node ${this@Node}, stepping down as candidate, heartbeat received.")
+                        state = NodeState.FOLLOWER
+                    }
+                }
+
             }
         }
     }
+
 
     private fun stepDownAsALeader(heartbeatMsg: HeartbeatMsg) {
         currentTerm = heartbeatMsg.term
@@ -72,123 +90,6 @@ class Node(
 
     private fun sendHeartbeatMsgThrouhg(link: Link) {
         link.incomingMsgsLine.add(HeartbeatMsg(currentTerm))
-    }
-
-    private suspend fun SequenceScope<Component>.doFollowerJob() {
-        println("Waiting for heartbeat")
-        wait(StateRequest(incomingMsg, predicate = { incomingMsg.value.term >= currentTerm }), failDelay = LEADER_SEND_HEARTBEAT_DELAY)
-
-        if (failed) {
-            when (state) {
-                NodeState.FOLLOWER -> {
-                    println("Heartbeat wasn't received. Reconfiguring the cluster by ${this@Node}")
-                    triggerReconfiguration()
-                }
-                NodeState.LEADER -> {
-                    links.forEach { link ->
-                        sendHeartbeatMsgThrouhg(link)
-                        println("heartbeat sent to the node: ${link.receiver} by ${this@Node}")
-                    }
-                    hold(LEADER_SEND_HEARTBEAT_DELAY)
-                }
-                NodeState.CANDIDATE -> {
-                    val voteRequests = links.map { it.receiver to VoteRequestMsg() }
-
-                    voteRequests.forEach { (node, msg) ->
-                        node.receiveVoteRequest(this@Node, msg)
-                    }
-
-                    val votes = receivedVotes.get()
-                    if (votes > totalNodes / 2) {
-                        this@Node.state = NodeState.LEADER
-                        this@Node.currentTerm += 1
-                        println("${this@Node} is now the leader of term $currentTerm")
-                    } else {
-                        this@Node.state = NodeState.FOLLOWER
-                        println("Votes ${votes}/${totalNodes / 2} received, ${this@Node} stays as follower")
-                    }
-                }
-            }
-        } else {
-            when (state) {
-                NodeState.FOLLOWER -> {
-                    println("Heartbeat: ${incomingMsg.value.term} processed by ${this@Node}")
-                    receiveVoteCandidate(this@Node, VoteCandidateMsg(this@Node, true))
-                }
-                NodeState.LEADER -> {
-                    stepDownAsALeader(incomingMsg.value)
-                }
-                NodeState.CANDIDATE -> {
-                    println("Node ${this@Node}, stepping down as candidate, heartbeat received.")
-                    state = NodeState.FOLLOWER
-                }
-            }
-
-        }
-
-//        if (incomingHeartBeatMsgs.isEmpty()) {
-//
-//        } else {
-//            while (incomingHeartBeatMsgs.isNotEmpty()) {
-//                val heartbeatMsg = incomingHeartBeatMsgs.poll()
-//                if (heartbeatMsg.term >= currentTerm) {
-//                    println("Heartbeat: ${heartbeatMsg} processed by ${this@Node}")
-//                    receiveVoteCandidate(this@Node, VoteCandidateMsg(this@Node, true))
-//                } else {
-//                    println("Heartbeat with term: ${heartbeatMsg.term} ignored by node: ${this@Node} with current term: ${currentTerm}")
-//                }
-//            }
-//        }
-    }
-
-    private suspend fun SequenceScope<Component>.doCandidateJob() {
-        val newMsgs = incomingHeartBeatMsgs.asSortedList().asSequence()
-            .map { it.component }
-            .filter { it.term >= currentTerm }
-            .toList()
-
-        if (newMsgs.isEmpty()) {
-            val voteRequests = links.map { it.receiver to VoteRequestMsg() }
-
-            voteRequests.forEach { (node, msg) ->
-                node.receiveVoteRequest(this@Node, msg)
-            }
-
-            val votes = receivedVotes.get()
-            if (votes > totalNodes / 2) {
-                this@Node.state = NodeState.LEADER
-                this@Node.currentTerm += 1
-                println("${this@Node} is now the leader of term $currentTerm")
-            } else {
-                this@Node.state = NodeState.FOLLOWER
-                println("Votes ${votes}/${totalNodes / 2} received, ${this@Node} stays as follower")
-            }
-
-        } else {
-            while (incomingHeartBeatMsgs.isNotEmpty()) {
-                val heartbeatMsg = incomingHeartBeatMsgs.poll()
-                if (heartbeatMsg.term >= currentTerm) {
-                    println("Node ${this@Node}, stepping down as candidate, heartbeat received.")
-                    state = NodeState.FOLLOWER
-                } else {
-                    println("Heartbeat with term: ${heartbeatMsg.term} ignored by node: ${this@Node} with current term: ${currentTerm}")
-                }
-            }
-        }
-
-    }
-
-    private suspend fun SequenceScope<Component>.waitFor(
-        queue: ComponentQueue<HeartbeatMsg>,
-        failAt: Duration
-    ) {
-
-        for (waitCounter in 0..failAt.inWholeMilliseconds) {
-            if (queue.isNotEmpty()) {
-                break
-            }
-//            hold(1.milliseconds)
-        }
     }
 
     fun triggerReconfiguration() {
@@ -226,7 +127,7 @@ class Node(
         if (msg.term >= currentTerm) {
             currentTerm = msg.term
             println("Node $id received heartbeat from term ${msg.term}")
-            incomingMsg.value = MsgState.HEARTBEAT_RECEIVED
+            incomingMsg.value = msg
             // Additional logic, if leader step down, if follower update leader if candidate step down etc.
         }
     }

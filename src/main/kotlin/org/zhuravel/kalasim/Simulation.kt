@@ -3,11 +3,11 @@ import Configuration.NODE_RECONFIGURATION_DISTRIBUTION_MEAN
 import Configuration.NODE_RECONFIGURATION_DISTRIBUTION_SD
 import Configuration.SIMULATION_RUN_FOR
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.currentCoroutineContext
+import kotlin.time.Duration.Companion.minutes
 import org.apache.commons.math3.distribution.LogNormalDistribution
 import org.kalasim.Environment
 import org.kalasim.normal
+import org.zhuravel.kalasim.IncomingMsg
 import org.zhuravel.kalasim.Node
 import org.zhuravel.kalasim.NodeState
 
@@ -19,7 +19,7 @@ object Configuration {
     const val NODE_RECONFIGURATION_DISTRIBUTION_MEAN = 300
     const val NODE_RECONFIGURATION_DISTRIBUTION_SD = 50
 
-    val SIMULATION_RUN_FOR = 5.seconds
+    val SIMULATION_RUN_FOR = 100.minutes
 }
 
 class Simulation : Environment() {
@@ -38,7 +38,7 @@ class Simulation : Environment() {
                         sd = NODE_RECONFIGURATION_DISTRIBUTION_SD,
                         rectify = false
                     ),
-                    this.env.now
+                    IncomingMsg()
                 )
             )
         }
