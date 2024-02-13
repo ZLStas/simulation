@@ -13,6 +13,7 @@ class Link(val receiver: Node, val incomingMsgsLine: ComponentQueue<Component>) 
                 hold(LINK_DELAY_DISTRIBUTION.sample().milliseconds, description = "Simulating network delay to ${receiver}")
                 receiver.receiveHeartbeat(incomingMsg)
             }
+            hold(duration = 1.milliseconds)
         }
     }
 }

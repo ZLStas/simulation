@@ -11,6 +11,7 @@ import org.kalasim.StateRequest
 enum class NodeState {
     LEADER, FOLLOWER, CANDIDATE
 }
+
 class Node(
     val id: Int,
     var state: NodeState,
@@ -24,12 +25,17 @@ class Node(
     val receivedVotes = AtomicInteger(0)
     val totalNodes = links.size + 1
     var currentTerm = 0
+    var start = true
 
 
     override fun process() = sequence {
         while (true) {
             println("Waiting for heartbeat")
-            wait(StateRequest(incomingMsg, predicate = { incomingMsg.value.term >= currentTerm }), failAt = now.plus(300.milliseconds))
+            wait(
+                StateRequest(incomingMsg, predicate = { incomingMsg.value.term >= currentTerm && !incomingMsg.value.processed }),
+//                failDelay = 300.milliseconds
+                failAt = now.plus(300.milliseconds)
+            )
 
             if (failed) {
                 when (state) {
@@ -37,6 +43,7 @@ class Node(
                         println("Heartbeat wasn't received. Reconfiguring the cluster by ${this@Node}")
                         triggerReconfiguration()
                     }
+
                     NodeState.LEADER -> {
                         links.forEach { link ->
                             sendHeartbeatMsgThrouhg(link)
@@ -44,6 +51,7 @@ class Node(
                         }
                         hold(LEADER_SEND_HEARTBEAT_DELAY)
                     }
+
                     NodeState.CANDIDATE -> {
                         val voteRequests = links.map { it.receiver to VoteRequestMsg() }
 
@@ -66,11 +74,14 @@ class Node(
                 when (state) {
                     NodeState.FOLLOWER -> {
                         println("Heartbeat: ${incomingMsg.value.term} processed by ${this@Node}")
+                        incomingMsg.value.processed = true
                         receiveVoteCandidate(this@Node, VoteCandidateMsg(this@Node, true))
                     }
+
                     NodeState.LEADER -> {
                         stepDownAsALeader(incomingMsg.value)
                     }
+
                     NodeState.CANDIDATE -> {
                         println("Node ${this@Node}, stepping down as candidate, heartbeat received.")
                         state = NodeState.FOLLOWER
@@ -79,6 +90,7 @@ class Node(
 
             }
         }
+        hold(duration = 1.milliseconds)
     }
 
 
@@ -89,7 +101,7 @@ class Node(
     }
 
     private fun sendHeartbeatMsgThrouhg(link: Link) {
-        link.incomingMsgsLine.add(HeartbeatMsg(currentTerm))
+        link.incomingMsgsLine.add(HeartbeatMsg(currentTerm, processed = false))
     }
 
     fun triggerReconfiguration() {
@@ -98,7 +110,10 @@ class Node(
     }
 
     fun receiveVoteRequest(candidate: Node, msg: VoteRequestMsg) {
-        if (state == NodeState.FOLLOWER || (state == NodeState.CANDIDATE && id < candidate.id && currentTerm <= candidate.currentTerm)) {
+        if (
+            (state == NodeState.FOLLOWER && currentTerm <= candidate.currentTerm) // follower give the votes to the first candidate
+            || (state == NodeState.CANDIDATE && currentTerm < candidate.currentTerm) // candidates votes for themselves unless term is bigger
+            ) {
             candidate.receiveVoteResult(this, VoteResponseMsg(this, true))
         } else {
             candidate.receiveVoteResult(this, VoteResponseMsg(this, false))
