@@ -3,6 +3,52 @@ package org.zhuravel
 class Simulation {
     companion object {
 
+        fun runWithBrokenLeaderToNodeLinksWhenUpperLimitIncreasesOnly(
+            delayType: DelayType,
+            from: Int,
+            until: Int,
+            networkDegradation: Int,
+            ticks: Int,
+            reconfigurationTimout: Int,
+            numberOfBrokenLinks: Int
+        ): Map<Int, Double> {
+            val cluster = buildBasicCluster(delayType, from, until, reconfigurationTimout)
+
+            return (1..networkDegradation).asSequence().map { index ->
+                cluster.applyForLeaderToNodeLinks(
+                    DelaySimulatorFactory().getSimulator(delayType, from, until + index),
+                    numberOfBrokenLinks
+                )
+                val reconfigurationNumber = cluster.runFor(ticks)
+                index to reconfigurationNumber.values.average()
+            }.toMap()
+        }
+
+        fun runWithBrokenLeaderToNodeLinksWhenLowerLimitIncreasesOnly(
+            delayType: DelayType,
+            from: Int,
+            until: Int,
+            networkDegradation: Int,
+            ticks: Int,
+            reconfigurationTimout: Int,
+            numberOfBrokenLinks: Int
+        ): Map<Int, Double> {
+            val cluster = buildBasicCluster(delayType, from, until, reconfigurationTimout)
+
+            return (1..networkDegradation).asSequence().map { index ->
+                cluster.applyForLeaderToNodeLinks(
+                    DelaySimulatorFactory().getSimulator(
+                        delayType,
+                        from + index,
+                        if (from + index <= until) until else from + index
+                    ),
+                    numberOfBrokenLinks
+                )
+                val reconfigurationNumber = cluster.runFor(ticks)
+                index to reconfigurationNumber.values.average()
+            }.toMap()
+        }
+
         fun runWithBrokenLeaderToNodeLinks(
             delayType: DelayType,
             from: Int,
@@ -22,6 +68,21 @@ class Simulation {
                 val reconfigurationNumber = cluster.runFor(ticks)
                 index to reconfigurationNumber.values.average()
             }.toMap()
+        }
+
+        fun runWithSlidingReconfiguration(
+            delayType: DelayType,
+            from: Int,
+            until: Int,
+            ticks: Int,
+        ): Map<Double, Double> {
+            return (1..100).asSequence()
+                .map { it * 0.01 }
+                .map {
+                    val cluster = buildBasicCluster(delayType, from, until, (it * until).toInt())
+                    val reconfigurationNumber = cluster.runFor(ticks)
+                    it to reconfigurationNumber.values.average()
+                }.toMap()
         }
 
         fun runWithAllNodesDegrading(
@@ -122,6 +183,8 @@ class Simulation {
 
             cluster.apply {
                 nodes = listOf(leader, node2, node3, node4, node5)
+//                nodes = listOf(leader, node2, node3, node4)
+//                nodes = listOf(leader, node2, node3)
             }
             return cluster
         }

@@ -39,11 +39,15 @@ data class Node(val id: Int, var isLeader: Boolean, var cluster: Cluster, var re
             return
         } else {
             links.forEach {
-                if (cluster?.reconfigurationsTriggeredForCurrentTime == false && it.source.isLeader && it.destination == this && it.delaySimulator.delay > reconfigurationTimout) {
+                if (cluster?.reconfigurationsTriggeredForCurrentTime == false && it.source.isLeader && it.destination == this && it.delaySimulator.delay > calculateReconfigurationTime()) {
                     triggerReconfiguration()
                 }
             }
         }
+    }
+
+    private fun calculateReconfigurationTime(): Int {
+        return reconfigurationTimout;
     }
 
     fun triggerReconfiguration(){

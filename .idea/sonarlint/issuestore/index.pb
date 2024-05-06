@@ -1,6 +1,4 @@
 
-F
-basic-simulation.ipynb,8/b/8b1d3e402d6d09c4b6eecabf33ff5b4d217c008a
 @
 build.gradle.kts,d/b/dbcff70658daf80b53ce624f6adcaa529df5ed8d
 ^
@@ -15,8 +13,6 @@ T
 $src/main/kotlin/org/zhuravel/Main.kt,a/9/a95a783491bbacf50170aaa40b860d6faa51220b
 S
 #src/main/kotlin/org/zhuravel/dsl.kt,4/3/430acb4ed373f0c95eed940a361bf5437c771993
-J
-basic-simulation-old.ipynb,4/3/43fbe9c78b6aaf72a009b924ce6536522b7063f2
 Z
 *src/main/kotlin/org/zhuravel/Simulation.kt,c/5/c5e24aaf782036c89bf90b20c917a5a69f14d98a
 d
@@ -31,3 +27,12 @@ C
 settings.gradle.kts,7/4/749edfcc96398253e5b3416184e95c46621da850
 @
 simulation.ipynb,b/8/b8a32684550ab753d73e177871d0ad3e24669bfc
+@
+comparison.ipynb,7/2/7276e836720be4103f32424728e7acd86d4b2956
+:
+
+sdfs.ipynb,f/4/f437a4a0c4f31780b85b4214f3d60564cff17aad
+S
+#.idea/sonarlint/issuestore/index.pb,9/f/9fe84ebb15faf917b7def6236dba604453cc61e0
+]
+-.idea/sonarlint/securityhotspotstore/index.pb,8/8/88a9255124c95bdc913197c120a8d560edc59c8e

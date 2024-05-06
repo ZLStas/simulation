@@ -11,7 +11,7 @@ repositories {
     mavenCentral()
 }
 
-dependencies  {
+dependencies {
     implementation("com.github.holgerbrandl:krangl:0.17")
     testImplementation(kotlin("test"))
 }
