@@ -1,14 +1,15 @@
 package org.zhuravel
 
-import java.lang.IllegalStateException
-
 class Cluster(var nodes: List<Node>) {
 
     constructor() : this(mutableListOf())
 
-
+    val links : MutableList<Link> = mutableListOf()
     var reconfigurationsNumber: Int = 0
     var reconfigurationsTriggeredForCurrentTime: Boolean = false
+    var mostEffectiveNode : Node? = null
+
+    var maxTethaM: Int = 0
 
     fun setLeader(id: Int) {
         val candidate = nodes.find { it.id == id }
@@ -40,6 +41,19 @@ class Cluster(var nodes: List<Node>) {
 
     fun tick() {
         reconfigurationsTriggeredForCurrentTime = false
+
+        links.forEach {
+            it.tick()
+        }
+
+        nodes.forEach{
+            it.calculateMaximalLatancyWithinMostEffectiveMagority()
+        }
+
+        maxTethaM = nodes.map { it.maxLm }.maxOf { it }
+
+        mostEffectiveNode = nodes.minByOrNull { it.maxLm }!!
+
         nodes.forEach{
             it.tick()
         }

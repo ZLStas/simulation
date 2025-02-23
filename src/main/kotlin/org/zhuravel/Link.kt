@@ -5,6 +5,12 @@ class Link(
     delaySimulator: DelaySimulator
 ) : DelaySimulator by delaySimulator {
 
+    var d : Int = 0
+
+    fun tick() {
+        d = delaySimulator.delay
+    }
+
     var delaySimulator: DelaySimulator = delaySimulator
         set(value) {
             field = value
@@ -29,6 +35,7 @@ class Link(
             return build().also { link ->
                 source!!.links.add(link)
                 destination!!.links.add(link)
+                source!!.cluster.links.add(link)
             }
         }
 
